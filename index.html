@@ -373,11 +373,22 @@ function initPlyr(){
 
 // ---------- Legendas ----------
 
+async function readFileSmart(file){
+  const buffer = await file.arrayBuffer();
+  try {
+    // tenta UTF-8 estrito primeiro
+    return new TextDecoder('utf-8', { fatal: true }).decode(buffer);
+  } catch(e){
+    log('Arquivo não é UTF-8 — decodificando como Windows-1252 (comum em legendas PT-BR antigas).');
+    return new TextDecoder('windows-1252').decode(buffer);
+  }
+}
+
 document.getElementById('subFile').addEventListener('change', async (e) => {
   const file = e.target.files[0];
   if(!file) return;
 
-  let text = await file.text();
+  let text = await readFileSmart(file);
   let vttText;
 
   if(file.name.endsWith('.srt')){
