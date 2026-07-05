@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Player Test — StreamFlix Lab</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/plyr@3.7.8/dist/plyr.css">
+<style>
+  :root{
+    --bg:#0b0d10;
+    --panel:#14171b;
+    --line:#242830;
+    --text:#e9edf1;
+    --dim:#8a9099;
+    --accent:#5ee6c8;
+    --danger:#ff6b6b;
+    --mono:'JetBrains Mono', ui-monospace, Menlo, monospace;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family:'Inter',-apple-system,Segoe UI,Roboto,sans-serif;
+    min-height:100vh;
+  }
+  header{
+    padding:20px 24px 16px;
+    border-bottom:1px solid var(--line);
+  }
+  header h1{
+    font-size:15px;
+    letter-spacing:.06em;
+    text-transform:uppercase;
+    color:var(--dim);
+    margin:0 0 4px;
+    font-weight:600;
+  }
+  header p{
+    margin:0;
+    font-size:13px;
+    color:var(--dim);
+  }
+  header .status{
+    display:inline-block;
+    margin-left:8px;
+    padding:2px 8px;
+    border-radius:20px;
+    font-size:11px;
+    font-family:var(--mono);
+    border:1px solid var(--line);
+  }
+  .status.ok{color:var(--accent);border-color:var(--accent)}
+  .status.err{color:var(--danger);border-color:var(--danger)}
+
+  main{
+    max-width:1000px;
+    margin:0 auto;
+    padding:28px 24px 60px;
+    display:grid;
+    gap:20px;
+  }
+
+  .panel{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:18px 20px;
+  }
+  .panel h2{
+    font-size:12px;
+    text-transform:uppercase;
+    letter-spacing:.06em;
+    color:var(--dim);
+    margin:0 0 14px;
+    font-weight:600;
+  }
+
+  .row{
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+    align-items:center;
+  }
+  .row + .row{margin-top:10px}
+
+  input[type=text], input[type=file]{
+    flex:1;
+    min-width:220px;
+    background:#0d0f12;
+    border:1px solid var(--line);
+    color:var(--text);
+    padding:9px 12px;
+    border-radius:6px;
+    font-size:13px;
+    font-family:var(--mono);
+  }
+  input[type=text]::placeholder{color:#565c65}
+
+  button{
+    background:var(--accent);
+    color:#04140f;
+    border:none;
+    padding:9px 16px;
+    border-radius:6px;
+    font-size:13px;
+    font-weight:600;
+    cursor:pointer;
+    white-space:nowrap;
+  }
+  button:hover{filter:brightness(1.08)}
+  button.ghost{
+    background:transparent;
+    color:var(--text);
+    border:1px solid var(--line);
+  }
+  button.ghost:hover{border-color:var(--accent);color:var(--accent)}
+
+  .presets{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+  .presets button{
+    background:transparent;
+    border:1px solid var(--line);
+    color:var(--dim);
+    font-weight:500;
+    font-size:12px;
+    padding:6px 10px;
+  }
+  .presets button:hover{color:var(--accent);border-color:var(--accent)}
+
+  .player-wrap{
+    position:relative;
+    background:#000;
+    border-radius:10px;
+    overflow:hidden;
+  }
+  video{width:100%;display:block;background:#000}
+
+  .log{
+    font-family:var(--mono);
+    font-size:12px;
+    color:var(--dim);
+    background:#0d0f12;
+    border:1px solid var(--line);
+    border-radius:6px;
+    padding:10px 12px;
+    max-height:140px;
+    overflow-y:auto;
+    white-space:pre-wrap;
+  }
+  .log .l-err{color:var(--danger)}
+  .log .l-ok{color:var(--accent)}
+
+  .qualities{display:flex;gap:6px;flex-wrap:wrap}
+  .qualities button{
+    background:transparent;
+    border:1px solid var(--line);
+    color:var(--dim);
+    font-size:12px;
+    padding:5px 10px;
+    font-weight:500;
+  }
+  .qualities button.active{
+    border-color:var(--accent);
+    color:var(--accent);
+  }
+
+  small.hint{
+    display:block;
+    color:#565c65;
+    font-size:11px;
+    margin-top:6px;
+    font-family:var(--mono);
+  }
+
+  /* Plyr accent override */
+  .plyr{--plyr-color-main: var(--accent);}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Player Lab <span id="engineStatus" class="status">idle</span></h1>
+  <p>Página isolada de teste — HLS/DASH/MP4, seleção de qualidade e legendas .vtt/.srt.</p>
+</header>
+
+<main>
+
+  <div class="panel">
+    <h2>Fonte do vídeo</h2>
+    <div class="row">
+      <input type="text" id="videoUrl" placeholder="Cole a URL .m3u8, .mpd ou .mp4 aqui">
+      <button onclick="loadFromUrl()">Carregar</button>
+    </div>
+    <div class="presets">
+      <button onclick="fillUrl('https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8')">Exemplo HLS multi-qualidade</button>
+      <button onclick="fillUrl('https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4')">Exemplo MP4</button>
+    </div>
+    <small class="hint">Streams HLS (.m3u8) trazem seleção automática de qualidade. MP4 não tem múltiplas qualidades por natureza.</small>
+  </div>
+
+  <div class="panel">
+    <h2>Legenda</h2>
+    <div class="row">
+      <input type="file" id="subFile" accept=".vtt,.srt">
+      <button class="ghost" onclick="removeSubtitle()">Remover legenda</button>
+    </div>
+    <small class="hint">.srt é convertido automaticamente para .vtt no navegador antes de anexar.</small>
+  </div>
+
+  <div class="panel">
+    <h2>Player</h2>
+    <div class="player-wrap">
+      <video id="player" playsinline controls></video>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <div class="qualities" id="qualityButtons"></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Log</h2>
+    <div class="log" id="log">Aguardando fonte...</div>
+  </div>
+
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.15/dist/hls.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/plyr@3.7.8/dist/plyr.min.js"></script>
+<script>
+const videoEl = document.getElementById('player');
+const logEl = document.getElementById('log');
+const statusEl = document.getElementById('engineStatus');
+const qualityButtonsEl = document.getElementById('qualityButtons');
+
+let hls = null;
+let plyr = null;
+let currentSubtitleUrl = null;
+
+function log(msg, type=''){
+  const line = document.createElement('div');
+  if(type) line.className = 'l-' + type;
+  const time = new Date().toLocaleTimeString();
+  line.textContent = `[${time}] ${msg}`;
+  logEl.appendChild(line);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+function setStatus(text, ok){
+  statusEl.textContent = text;
+  statusEl.className = 'status ' + (ok === true ? 'ok' : ok === false ? 'err' : '');
+}
+
+function fillUrl(url){
+  document.getElementById('videoUrl').value = url;
+}
+
+function destroyCurrent(){
+  if(hls){ hls.destroy(); hls = null; }
+  if(plyr){ plyr.destroy(); plyr = null; }
+  qualityButtonsEl.innerHTML = '';
+  videoEl.innerHTML = '';
+}
+
+function loadFromUrl(){
+  const url = document.getElementById('videoUrl').value.trim();
+  if(!url){ log('Cole uma URL antes de carregar.', 'err'); return; }
+  destroyCurrent();
+  log('Carregando: ' + url);
+
+  const isHls = url.includes('.m3u8');
+
+  if(isHls){
+    if(Hls.isSupported()){
+      hls = new Hls();
+      hls.loadSource(url);
+      hls.attachMedia(videoEl);
+
+      hls.on(Hls.Events.MANIFEST_PARSED, (event, data) => {
+        setStatus('hls.js · ' + data.levels.length + ' níveis', true);
+        log('Manifest OK — ' + data.levels.length + ' qualidades encontradas.', 'ok');
+        buildQualityButtons(data.levels);
+        initPlyr();
+      });
+
+      hls.on(Hls.Events.ERROR, (event, data) => {
+        log('Erro HLS: ' + data.details, 'err');
+        setStatus('erro', false);
+      });
+    } else if(videoEl.canPlayType('application/vnd.apple.mpegurl')){
+      // Safari nativo
+      videoEl.src = url;
+      setStatus('HLS nativo (Safari)', true);
+      log('Usando suporte nativo do Safari para HLS.', 'ok');
+      initPlyr();
+    } else {
+      log('HLS não suportado neste navegador.', 'err');
+      setStatus('sem suporte', false);
+    }
+  } else {
+    videoEl.src = url;
+    setStatus('mp4 direto', true);
+    log('Fonte direta carregada (sem seleção de qualidade).');
+    initPlyr();
+  }
+}
+
+function buildQualityButtons(levels){
+  qualityButtonsEl.innerHTML = '';
+
+  const autoBtn = document.createElement('button');
+  autoBtn.textContent = 'Auto';
+  autoBtn.className = 'active';
+  autoBtn.onclick = () => {
+    hls.currentLevel = -1;
+    setActiveQualityBtn(autoBtn);
+  };
+  qualityButtonsEl.appendChild(autoBtn);
+
+  levels.forEach((level, index) => {
+    const btn = document.createElement('button');
+    btn.textContent = level.height ? level.height + 'p' : (Math.round(level.bitrate/1000) + 'kbps');
+    btn.onclick = () => {
+      hls.currentLevel = index;
+      setActiveQualityBtn(btn);
+      log('Qualidade fixada em ' + btn.textContent);
+    };
+    qualityButtonsEl.appendChild(btn);
+  });
+}
+
+function setActiveQualityBtn(activeBtn){
+  [...qualityButtonsEl.children].forEach(b => b.classList.remove('active'));
+  activeBtn.classList.add('active');
+}
+
+function initPlyr(){
+  plyr = new Plyr(videoEl, {
+    captions: { active: true, update: true },
+    settings: ['captions', 'speed']
+  });
+  if(currentSubtitleUrl){
+    attachSubtitleTrack(currentSubtitleUrl);
+  }
+}
+
+// ---------- Legendas ----------
+
+document.getElementById('subFile').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if(!file) return;
+
+  let text = await file.text();
+  let vttText;
+
+  if(file.name.endsWith('.srt')){
+    vttText = srtToVtt(text);
+    log('Legenda .srt convertida para .vtt.');
+  } else {
+    vttText = text;
+    log('Legenda .vtt carregada.');
+  }
+
+  const blob = new Blob([vttText], { type: 'text/vtt' });
+  const url = URL.createObjectURL(blob);
+  currentSubtitleUrl = url;
+  attachSubtitleTrack(url);
+});
+
+function attachSubtitleTrack(url){
+  // remove track anterior
+  const oldTrack = videoEl.querySelector('track');
+  if(oldTrack) oldTrack.remove();
+
+  const track = document.createElement('track');
+  track.kind = 'subtitles';
+  track.label = 'Português';
+  track.srclang = 'pt';
+  track.src = url;
+  track.default = true;
+  videoEl.appendChild(track);
+
+  if(plyr){
+    // força o Plyr a reconhecer a nova track
+    setTimeout(() => {
+      videoEl.textTracks[0].mode = 'showing';
+    }, 200);
+  }
+  log('Legenda anexada ao player.', 'ok');
+}
+
+function removeSubtitle(){
+  const oldTrack = videoEl.querySelector('track');
+  if(oldTrack) oldTrack.remove();
+  currentSubtitleUrl = null;
+  log('Legenda removida.');
+}
+
+function srtToVtt(srt){
+  let vtt = 'WEBVTT\n\n';
+  vtt += srt
+    .replace(/\r+/g, '')
+    .replace(/^\d+\n/gm, '')
+    .replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, '$1.$2');
+  return vtt;
+}
+
+log('Player pronto. Cole uma URL ou use um dos exemplos.');
+</script>
+
+</body>
+</html>
