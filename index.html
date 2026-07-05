@@ -191,11 +191,17 @@
       <input type="text" id="videoUrl" placeholder="Cole a URL .m3u8, .mpd ou .mp4 aqui">
       <button onclick="loadFromUrl()">Carregar</button>
     </div>
+    <div class="row" style="margin-top:8px">
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--dim);cursor:pointer">
+        <input type="checkbox" id="forceProxy" style="width:auto;flex:none">
+        Forçar via proxy (marca automático se a URL for http://)
+      </label>
+    </div>
     <div class="presets">
       <button onclick="fillUrl('https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8')">Exemplo HLS multi-qualidade</button>
       <button onclick="fillUrl('https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4')">Exemplo MP4</button>
     </div>
-    <small class="hint">Streams HLS (.m3u8) trazem seleção automática de qualidade. MP4 não tem múltiplas qualidades por natureza.</small>
+    <small class="hint">Streams HLS (.m3u8) trazem seleção automática de qualidade. MP4 não tem múltiplas qualidades por natureza. URLs http:// (Xtream, IPTV) passam pelo proxy /api/proxy automaticamente.</small>
   </div>
 
   <div class="panel">
@@ -204,7 +210,14 @@
       <input type="file" id="subFile" accept=".vtt,.srt">
       <button class="ghost" onclick="removeSubtitle()">Remover legenda</button>
     </div>
-    <small class="hint">.srt é convertido automaticamente para .vtt no navegador antes de anexar.</small>
+    <div class="row" style="margin-top:10px">
+      <label style="font-size:12px;color:var(--dim);white-space:nowrap">Sincronia (s):</label>
+      <button class="ghost" onclick="nudgeOffset(-0.5)">-0.5</button>
+      <input type="text" id="offsetValue" value="0.0" style="max-width:70px;text-align:center;flex:none" readonly>
+      <button class="ghost" onclick="nudgeOffset(0.5)">+0.5</button>
+      <button class="ghost" onclick="resetOffset()">Zerar</button>
+    </div>
+    <small class="hint">.srt é convertido automaticamente para .vtt. Se a legenda estiver atrasada, aumente o offset; se estiver adiantada, diminua.</small>
   </div>
 
   <div class="panel">
@@ -235,6 +248,8 @@ const qualityButtonsEl = document.getElementById('qualityButtons');
 let hls = null;
 let plyr = null;
 let currentSubtitleUrl = null;
+let originalCueTimes = [];
+let currentOffset = 0;
 
 function log(msg, type=''){
   const line = document.createElement('div');
@@ -262,9 +277,22 @@ function destroyCurrent(){
 }
 
 function loadFromUrl(){
-  const url = document.getElementById('videoUrl').value.trim();
+  let url = document.getElementById('videoUrl').value.trim();
   if(!url){ log('Cole uma URL antes de carregar.', 'err'); return; }
   destroyCurrent();
+
+  const isHttp = url.startsWith('http://');
+  const forceProxy = document.getElementById('forceProxy').checked;
+
+  if(isHttp && !forceProxy){
+    document.getElementById('forceProxy').checked = true;
+  }
+
+  if(isHttp || forceProxy){
+    log('URL http detectada — roteando via /api/proxy para evitar mixed content.');
+    url = '/api/proxy?url=' + encodeURIComponent(url);
+  }
+
   log('Carregando: ' + url);
 
   const isHls = url.includes('.m3u8');
@@ -371,6 +399,10 @@ function attachSubtitleTrack(url){
   const oldTrack = videoEl.querySelector('track');
   if(oldTrack) oldTrack.remove();
 
+  currentOffset = 0;
+  originalCueTimes = [];
+  document.getElementById('offsetValue').value = '0.0';
+
   const track = document.createElement('track');
   track.kind = 'subtitles';
   track.label = 'Português';
@@ -379,19 +411,54 @@ function attachSubtitleTrack(url){
   track.default = true;
   videoEl.appendChild(track);
 
+  track.addEventListener('load', () => {
+    const tt = track.track;
+    tt.mode = 'showing';
+    // guarda os tempos originais das cues pra poder aplicar offset depois
+    originalCueTimes = Array.from(tt.cues || []).map(c => ({ start: c.startTime, end: c.endTime }));
+    log('Cues carregadas: ' + originalCueTimes.length, 'ok');
+  });
+
   if(plyr){
-    // força o Plyr a reconhecer a nova track
     setTimeout(() => {
-      videoEl.textTracks[0].mode = 'showing';
+      if(videoEl.textTracks[0]) videoEl.textTracks[0].mode = 'showing';
     }, 200);
   }
   log('Legenda anexada ao player.', 'ok');
+}
+
+function applyOffset(){
+  const tt = videoEl.textTracks[0];
+  if(!tt || !tt.cues || originalCueTimes.length === 0){
+    log('Nenhuma cue carregada ainda para aplicar offset.', 'err');
+    return;
+  }
+  const cues = tt.cues;
+  for(let i = 0; i < cues.length && i < originalCueTimes.length; i++){
+    cues[i].startTime = Math.max(0, originalCueTimes[i].start + currentOffset);
+    cues[i].endTime = Math.max(0, originalCueTimes[i].end + currentOffset);
+  }
+  document.getElementById('offsetValue').value = currentOffset.toFixed(1);
+  log('Offset aplicado: ' + currentOffset.toFixed(1) + 's');
+}
+
+function nudgeOffset(delta){
+  currentOffset += delta;
+  applyOffset();
+}
+
+function resetOffset(){
+  currentOffset = 0;
+  applyOffset();
 }
 
 function removeSubtitle(){
   const oldTrack = videoEl.querySelector('track');
   if(oldTrack) oldTrack.remove();
   currentSubtitleUrl = null;
+  originalCueTimes = [];
+  currentOffset = 0;
+  document.getElementById('offsetValue').value = '0.0';
   log('Legenda removida.');
 }
 
